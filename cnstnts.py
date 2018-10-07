@@ -1,4 +1,16 @@
 
+# https://pe.usps.com/text/pub28/28c2_014.htm
+ABBR_PA_DRCT = {
+    'NORTH': 'N',
+    'SOUTH': 'S',
+    'EAST': 'E',
+    'WEST': 'W',
+    'NORTHEAST': 'NE',
+    'NORTHWEST': 'NW',
+    'SOUTHEAST': 'SE',
+    'SOUTHWEST': 'SW'
+}
+
 # https://pe.usps.com/text/pub28/28apc_002.htm
 ABBR_PA_SUFX = {
     'ALLEE': 'ALY',

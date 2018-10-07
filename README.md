@@ -42,7 +42,7 @@ Our mailing address blueprint consists of the following fields:
 * `ll_zip5` = five-digit ZIP code
 * `ll_pls4` = four-digit extended portion of ZIP+4 code
 
-Not all fields are required to be filled in (e.g. pa_pobx) in order for the mailing address to be considered complete.
+It is based on the [USPS postal addressing standards for delivery address lines](https://pe.usps.com/text/pub28/28c2_012.htm). Not all fields are required to be filled in (e.g. pa_pobx) in order for the mailing address to be considered complete.
 
 A field for country is not provided, as we are assuming all mailing addresses are located in the United States.
 
@@ -55,12 +55,12 @@ The [PostalPro *ZIP+4 Product* database](https://postalpro.usps.com/address-qual
 * `entry[58:68]` = primary address number (minimum)
 * `entry[68:78]` = primary address number (maximum)
 * `entry[22:24]` = primary address predirectional
-* `entry[24:52]` = primary address entryeet name
+* `entry[24:52]` = primary address entry name
 * `entry[52:56]` = primary address suffix
 * `entry[56:58]` = primary address postdirectional
 * `entry[119:123]` = secondary address identifier
-* `entry[123:131]` = secondary address
-* `entry[131:139]` = secondary address
+* `entry[123:131]` = secondary address (minimum)
+* `entry[131:139]` = secondary address (maximum)
 * `entry[177:183]` = city state key
 * `entry[157:159]` = state
 * `entry[1:6]` = five-digit ZIP code
@@ -80,19 +80,15 @@ City abbreviations are saved for use when validating addresses, as [the USPS pre
 
 An interesting thing to note is that the PostalPro technical documentation seems to incorrectly list the substring of the City State Key in the *ZIP+4 Product* database. Testing its substring on the sample file provided gives the first letter and only four digits of the City State Key rather than the letter and all five digits.
 
-The fields we sorted into our blueprint are then compared with the fields in these databases. Entries where one field matches with the other are saved into a list. This is done for all blueprint fields that are not blank, so that we end up with a list of entries for each non-empty field.
+Relevant fields with possible abbreviations are first double checked with our dictionaries of constants found in `cnstnts.py`. These were mostly taken from the USPS standards website, and consist officially recognized abbreviations of possible suffixes, identifiers, and other fields. A check is done between the sorted input field and the set of keys and values in their respective dictionaries. If a match is found, then that field is replaced by the abbreviated value stored in the dictionary.
+
+The fields we sorted into our blueprint are then compared with the fields in these databases. Entries where one field matches with the other are saved into a list. This is done for all blueprint fields that are not blank, so that we end up with a list of entries for each non-empty field. To clarify, we compare our sorted state value with our *ZIP+4 Product* and *City State Product* databases, pull all addresses with the same state, and store that list of addresses, then we do the same with city, street name, street suffix, and the remainin eleven fields we initially sorted (except for our PO Box and extra fields).
 
 ---
 
 # Third Step: Compare lists with each other and look at entries they have in common.
 
-If there is one match between all fields, we have a winner.
-
-If not, then between the fields that do not match, compare for similarity and pick the most similar one
-https://stackoverflow.com/questions/17388213/find-the-similarity-metric-between-two-strings
-https://stackoverflow.com/questions/6690739/fuzzy-string-comparison-in-python-confused-with-which-library-to-use
-
-We gave the fields in our blueprint priority importance as follows:
+We gave the fields in our blueprint a priority order as follows:
 * state
 * five-digit ZIP code
 * four-digit extended portion of ZIP+4 code
@@ -104,7 +100,9 @@ We gave the fields in our blueprint priority importance as follows:
 
 \*Considered non-essential: use closest matching entries when available, preserve in output if none found
 
+Between the eleven lists we created in our second step, we look for addresses with the most fields in common according to priority (they appear identically in the most number of these lists). Once we do that, we look at the remaining fields that do not match up in those addresses and compare them for similarity according to priority. This is once again done via [difflib.SequenceMatcher's ratio()](https://docs.python.org/3.7/library/difflib.html#difflib.SequenceMatcher.ratio) function, and can be swapped out with the library's quick_ratio() or real_quick_ratio() functions if speed becomes a concern.
 
+The most similar address is then considered the validated version of the address given as an input, and the project returns this validated address.
 
 # Areas of Improvement
 
@@ -112,7 +110,8 @@ Accounting for more edge cases and user input errors when standardizing and vali
 
 * multiple hyphens in the input zip code field will likely result in an incorrect zip code parse
 * PO Box addresses are processed correctly if they contain extraneous punctuation and whitespace, but not if the letters themselves are spelled wrong
-* if there are multiple PO Boxes, only the last one is outputed in the final address
+* if there are multiple PO Boxes, only the last one is given as an output
+* hyphenated directionals and directionals that are part of the street names are sometimes not accounted for as per [Section 223](https://pe.usps.com/text/pub28/28c2_014.htm) (some of these cases also rely on there being specific local information about the name itself, which can be fixed by taking the pre- and post-directional fields we had into account when comparing database values with our inputs)
 
 ---
 
@@ -120,6 +119,7 @@ Accounting for more edge cases and user input errors when standardizing and vali
 
 ---
 
+## Scratchpad, Please Ignore
 
 The given validation instructions were to do so "based on the provided zip code and state", so we assume that:
 * these two fields will never be incorrect
@@ -138,7 +138,6 @@ ll_stat = state
 ll_zip5 = five-digit ZIP code
 ll_pls4 = four-digit extended portion of ZIP+4 code
 
-
 State Abbreviation List
 http://abbreviations.yourdictionary.com/articles/state-abbrev.html
 
@@ -148,7 +147,7 @@ https://pe.usps.com/text/pub28/28c2_013.htm
 "The other exception is when the local address information unit has determined that one of the directional letters is used as an alphabet indicator and not as a directional."
 https://pe.usps.com/text/pub28/28c2_014.htm
 
-Leave directionals alone
+Leave directionals alone?
 
 Check to see if there are directionals at the ends of the string, if there are, try to match street names in the database to portions of the input street name. If one match is found, use that match. If multiple are found that are different, then ignore and leave it as is
 
@@ -156,6 +155,9 @@ If it's already abbreviated, leave it alone.
 
 If it's not, leave it alone since USPS considers that acceptable
 
+Between the fields that do not match, compare for similarity and pick the most similar one
+https://stackoverflow.com/questions/17388213/find-the-similarity-metric-between-two-strings
+https://stackoverflow.com/questions/6690739/fuzzy-string-comparison-in-python-confused-with-which-library-to-use
 
 "If an address has two consecutive words that appear on the suffix table (Appendix C), abbreviate the second of the two words according to the suffix table and place it in the suffix field. The first of the two words is part of the primary name. Spell it out on the mailpiece in its entirety after the street name."
 https://pe.usps.com/text/pub28/28c2_015.htm
@@ -163,6 +165,4 @@ https://pe.usps.com/text/pub28/28c2_015.htm
 "Numeric street names, for example, 7TH ST or SEVENTH ST, should be output on the mailpiece exactly as they appear in the ZIP+4 file."
 https://pe.usps.com/text/pub28/28c2_016.htm
 
-
-
-put them in prefix and suffix, check to see what's left inside pa_name, if the words left can all be abbbreviated according to C1 Street Suffix Abbreviations, then 
+put them in prefix and suffix, check to see what's left inside pa_name, if the words left can all be abbbreviated according to C1 Street Suffix Abbreviations, then...?
